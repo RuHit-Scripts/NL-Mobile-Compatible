@@ -243,7 +243,7 @@ function Library:Window(options)
         tabSection.Size = UDim2.new(0, 126, 0, 15)
 
         local function ResizeTS(num)
-            tabSection.Size += UDim2.new(0, 0, 0, num)
+            tabSection.Size = tabSection.Size + UDim2.new(0, 0, 0, num)
         end
 
         tabSectionLabel.Name = "tabSectionLabel"
@@ -404,7 +404,7 @@ function Library:Window(options)
                 sectionSizeConstraint.MinSize = Vector2.new(215, 35)
 
                 local function Resize(num)
-                    sectionSizeConstraint.MinSize += Vector2.new(0, num)
+                    sectionSizeConstraint.MinSize = sectionSizeConstraint.MinSize + Vector2.new(0, num)
                 end
 
                 local elements = {}
@@ -794,7 +794,7 @@ function Library:Window(options)
                         clickEffect({button = dropdownBtn, amount = 5})
 
                         Count = Count + 1
-                        dropdownList.ZIndex -= Count
+                        dropdownList.ZIndex = dropdownList.ZIndex - Count
                         DropYSize = DropYSize + 18
 
                         dropdownBtn.MouseButton1Click:Connect(function()
