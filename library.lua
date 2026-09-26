@@ -29,6 +29,7 @@ local function Dragify(frame, parent)
     local dragInput, startPos, framePos
 
     frame.InputBegan:Connect(function(input)
+        if parent:GetAttribute("NLNoDrag") then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             startPos = Vector2.new(input.Position.X, input.Position.Y)
@@ -1259,16 +1260,100 @@ function Library:Window(options)
     local fbStroke = Instance.new("UIStroke", FloatBtn); fbStroke.Thickness = 2; fbStroke.Color = Color3.fromRGB(20,20,26)
     Dragify(FloatBtn, FloatBtn)
 
-    local windowShown = true
-    local function setWindow(v)
-        windowShown = v
-        Body.Visible = v
-    end
-    FloatBtn.MouseButton1Click:Connect(function() setWindow(not windowShown) end)
+    -- ===================== footer: avatar + nick + github link =====================
+    local lp = game.Players.LocalPlayer
+    local Footer = Instance.new("Frame")
+    Footer.Name = "Footer"
+    Footer.Parent = SideBar
+    Footer.AnchorPoint = Vector2.new(0, 1)
+    Footer.Position = UDim2.new(0, 0, 1, -6)
+    Footer.Size = UDim2.new(1, -12, 0, 46)
+    Footer.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
+    Footer.BorderSizePixel = 0
+    Footer.ZIndex = 5
+    local fCorner = Instance.new("UICorner", Footer); fCorner.CornerRadius = UDim.new(0, 6)
+    local fStroke = Instance.new("UIStroke", Footer); fStroke.Color = Color3.fromRGB(40,44,56); fStroke.Transparency = 0.4
 
-    game:GetService("UserInputService").InputBegan:Connect(function(ip, gpe)
+    local Avatar = Instance.new("ImageLabel")
+    Avatar.Name = "Avatar"; Avatar.Parent = Footer; Avatar.BackgroundTransparency = 1
+    Avatar.Image = ""; Avatar.ScaleType = Enum.ScaleType.Crop
+    Avatar.Position = UDim2.fromOffset(8, 8); Avatar.Size = UDim2.fromOffset(30, 30); Avatar.ZIndex = 6
+    local avCorner = Instance.new("UICorner", Avatar); avCorner.CornerRadius = UDim.new(0, 15)
+    local AvLetter = Instance.new("TextLabel")
+    AvLetter.Parent = Avatar; AvLetter.BackgroundTransparency = 1; AvLetter.Size = UDim2.fromScale(1,1)
+    AvLetter.Font = Enum.Font.GothamBold; AvLetter.TextSize = 15; AvLetter.TextColor3 = Color3.fromRGB(150,155,170); AvLetter.Text = "?"; AvLetter.ZIndex = 7
+
+    local NickLbl = Instance.new("TextLabel")
+    NickLbl.Parent = Footer; NickLbl.BackgroundTransparency = 1
+    NickLbl.Position = UDim2.fromOffset(44, 8); NickLbl.Size = UDim2.new(1, -50, 0, 16)
+    NickLbl.Font = Enum.Font.GothamMedium; NickLbl.TextSize = 12; NickLbl.TextXAlignment = Enum.TextXAlignment.Left
+    NickLbl.TextColor3 = Color3.fromRGB(234,239,245); NickLbl.Text = "player"; NickLbl.ZIndex = 6
+
+    local LinkBtn = Instance.new("TextButton")
+    LinkBtn.Parent = Footer; LinkBtn.BackgroundTransparency = 1
+    LinkBtn.Position = UDim2.fromOffset(44, 25); LinkBtn.Size = UDim2.new(1, -50, 0, 14)
+    LinkBtn.Font = Enum.Font.Gotham; LinkBtn.TextSize = 11; LinkBtn.TextXAlignment = Enum.TextXAlignment.Left
+    LinkBtn.TextColor3 = Color3.fromRGB(37,99,235); LinkBtn.Text = "github.com/RuHit-Scripts"; LinkBtn.AutoButtonColor = false; LinkBtn.ZIndex = 6
+    LinkBtn.MouseButton1Click:Connect(function()
+        setclipboard and setclipboard("https://github.com/RuHit-Scripts/NL-Mobile-Compatible")
+    end)
+
+    task.spawn(function()
+        local ok, url = pcall(function()
+            return lp:GetUserThumbnail(lp.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+        end)
+        if not ok then
+            pcall(function()
+                local hs = game:GetService("HttpService")
+                local r = hs:GetAsync(("https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=%d&size=150x150&format=Png"):format(lp.UserId))
+                url = hs:JSONDecode(r).data[1].imageUrl
+            end)
+        end
+        if type(url) == "string" and url ~= "" then Avatar.Image = url; AvLetter.Visible = false end
+    end)
+
+    -- ===================== built-in Settings tab =====================
+    local settingsSection = tabsections:TabSection({ text = "Settings" })
+    local settingsTab = settingsSection:Tab({ text = "Interface", icon = "rbxassetid://7999345313" }):Section({ text = "General" })
+
+    local uiLocked = false
+    local wmVisible = true
+    local windowShown = true
+    local animating = false
+    local toggleWindow
+
+    settingsTab:Toggle({ text = "Lock movement", state = false, callback = function(v) uiLocked = v; Body:SetAttribute("NLNoDrag", v); FloatBtn:SetAttribute("NLNoDrag", v) end })
+    settingsTab:Toggle({ text = "Watermark", state = true, callback = function(v) wmVisible = v; FloatBtn.Visible = v end })
+    settingsTab:Keybind({ text = "Toggle key", default = Enum.KeyCode.RightShift, callback = function() toggleWindow() end })
+
+    -- ===================== open/close with animation =====================
+    local bodyGrad = Instance.new("UIGradient", Body); bodyGrad.Enabled = false
+    local function tween(inst, info, props)
+        local t = TweenService:Create(inst, info, props); t:Play(); return t
+    end
+    toggleWindow = function()
+        if animating then return end
+        animating = true
+        windowShown = not windowShown
+        if windowShown then
+            Body.Visible = true
+            Body.Size = UDim2.new(0, 439*0.85, 0, 344*0.85)
+            Body.BackgroundTransparency = 1
+            tween(Body, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 439, 0, 344), BackgroundTransparency = 0
+            })
+            task.delay(0.28, function() animating = false end)
+        else
+            tween(Body, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                Size = UDim2.new(0, 439*0.85, 0, 344*0.85), BackgroundTransparency = 1
+            })
+            task.delay(0.2, function() Body.Visible = false; animating = false end)
+        end
+    end
+    FloatBtn.MouseButton1Click:Connect(toggleWindow)
+    game:GetService("UserInputService").InputBegan:Connect(function(ip)
         if ip.UserInputType == Enum.UserInputType.Keyboard and ip.KeyCode == Enum.KeyCode.RightShift then
-            setWindow(not windowShown)
+            toggleWindow()
         end
     end)
 
