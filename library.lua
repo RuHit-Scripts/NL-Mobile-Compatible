@@ -26,33 +26,28 @@ local function Dragify(frame, parent)
     parent = parent or frame
 
     local dragging = false
-    local dragInput, startPos, framePos
+    local startPos, framePos
 
-    frame.InputBegan:Connect(function(input)
+    -- press must start on the handle; movement/end tracked globally so fast drags survive
+    frame.InputBegan:Connect(function(ip)
         if parent:GetAttribute("NLNoDrag") then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if ip.UserInputType == Enum.UserInputType.MouseButton1 or ip.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            startPos = Vector2.new(input.Position.X, input.Position.Y)
+            startPos = Vector2.new(ip.Position.X, ip.Position.Y)
             framePos = parent.Position
-
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
         end
     end)
 
-    frame.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
+    input.InputChanged:Connect(function(ip)
+        if dragging and (ip.UserInputType == Enum.UserInputType.MouseMovement or ip.UserInputType == Enum.UserInputType.Touch) then
+            local delta = ip.Position - startPos
+            parent.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
         end
     end)
 
-    input.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - startPos
-            parent.Position  = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+    input.InputEnded:Connect(function(ip)
+        if ip.UserInputType == Enum.UserInputType.MouseButton1 or ip.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
         end
     end)
 end
@@ -106,7 +101,6 @@ function Library:Window(options)
 
     local SG = Instance.new("ScreenGui")
     local Body = Instance.new("Frame")
-    Dragify(Body, Body)
     local bodyCorner = Instance.new("UICorner")
 
     local SideBar = Instance.new("Frame")
@@ -131,7 +125,7 @@ function Library:Window(options)
     Body.BackgroundColor3 = Color3.fromRGB(9, 8, 13)
     Body.BorderSizePixel = 0
     Body.Position = UDim2.new(0.465730786, 0, 0.5, 0)
-    Body.Size = UDim2.new(0, 439, 0, 344)
+    Body.Size = UDim2.new(0, 600, 0, 360)
 
     bodyCorner.CornerRadius = UDim.new(0, 3)
     bodyCorner.Name = "bodyCorner"
@@ -141,7 +135,7 @@ function Library:Window(options)
     SideBar.Parent = Body
     SideBar.BackgroundColor3 = Color3.fromRGB(26, 36, 48)
     SideBar.BorderSizePixel = 0
-    SideBar.Size = UDim2.new(0, 125, 0, 344)
+    SideBar.Size = UDim2.new(0, 125, 0, 360)
 
     sidebarCorner.CornerRadius = UDim.new(0, 3)
     sidebarCorner.Name = "sidebarCorner"
@@ -152,7 +146,7 @@ function Library:Window(options)
     sbLine.BackgroundColor3 = Color3.fromRGB(15, 23, 36)
     sbLine.BorderSizePixel = 0
     sbLine.Position = UDim2.new(0.99490571, 0, 0, 0)
-    sbLine.Size = UDim2.new(0, 2, 0, 344)
+    sbLine.Size = UDim2.new(0, 2, 0, 360)
 
     TopBar.Name = "TopBar"
     TopBar.Parent = Body
@@ -183,6 +177,10 @@ function Library:Window(options)
     Title.TextSize = 13
     Title.TextWrapped = true
 
+    -- drag the window by its top bar or title (content areas swallow taps otherwise)
+    Dragify(TopBar, Body)
+    Dragify(Title, Body)
+
     --[[saveBtn.Name = "saveBtn"
     saveBtn.Parent = TopBar
     saveBtn.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -212,7 +210,7 @@ function Library:Window(options)
     allPages.BackgroundTransparency = 1.000
     allPages.BorderSizePixel = 0
     allPages.Position = UDim2.new(0.29508087, 0, 0.100775197, 0)
-    allPages.Size = UDim2.new(0, 309, 0, 309)
+    allPages.Size = UDim2.new(0, 470, 0, 325)
 
     tabContainer.Name = "tabContainer"
     tabContainer.Parent = SideBar
@@ -220,7 +218,7 @@ function Library:Window(options)
     tabContainer.BackgroundTransparency = 1.000
     tabContainer.BorderSizePixel = 0
     tabContainer.Position = UDim2.new(0, 0, 0.100775197, 0)
-    tabContainer.Size = UDim2.new(0, 125, 0, 309)
+    tabContainer.Size = UDim2.new(0, 125, 0, 325)
 
     local tabsections = {}
 
@@ -332,7 +330,7 @@ function Library:Window(options)
             newPage.BorderSizePixel = 0
             newPage.ClipsDescendants = false
             newPage.Position = UDim2.new(0.021598272, 0, 0.0237068962, 0)
-            newPage.Size = UDim2.new(0, 295, 0, 293)
+            newPage.Size = UDim2.new(0, 460, 0, 320)
             newPage.ScrollBarThickness = 4
             newPage.CanvasSize = UDim2.new(0,0,0,0)
 
@@ -1327,27 +1325,30 @@ function Library:Window(options)
     settingsTab:Keybind({ text = "Toggle key", default = Enum.KeyCode.RightShift, callback = function() toggleWindow() end })
 
     -- ===================== open/close with animation =====================
-    local bodyGrad = Instance.new("UIGradient", Body); bodyGrad.Enabled = false
     local function tween(inst, info, props)
         local t = TweenService:Create(inst, info, props); t:Play(); return t
     end
+    -- animate the whole group as one unit (GroupTransparency) so children never desync;
+    -- plus a subtle slide via AnchorPoint-stable position offset
+    Body.GroupInstance = true
     toggleWindow = function()
         if animating then return end
         animating = true
         windowShown = not windowShown
+        local basePos = Body.Position
         if windowShown then
             Body.Visible = true
-            Body.Size = UDim2.new(0, 439*0.85, 0, 344*0.85)
-            Body.BackgroundTransparency = 1
-            tween(Body, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 439, 0, 344), BackgroundTransparency = 0
+            Body.GroupTransparency = 1
+            Body.Position = basePos - UDim2.fromOffset(0, 14)
+            tween(Body, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                GroupTransparency = 0, Position = basePos + UDim2.fromOffset(0, 14)
             })
-            task.delay(0.28, function() animating = false end)
+            task.delay(0.3, function() Body.Position = basePos; animating = false end)
         else
-            tween(Body, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-                Size = UDim2.new(0, 439*0.85, 0, 344*0.85), BackgroundTransparency = 1
+            tween(Body, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                GroupTransparency = 1
             })
-            task.delay(0.2, function() Body.Visible = false; animating = false end)
+            task.delay(0.18, function() Body.Visible = false; animating = false end)
         end
     end
     FloatBtn.MouseButton1Click:Connect(toggleWindow)
