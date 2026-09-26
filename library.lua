@@ -1295,7 +1295,7 @@ function Library:Window(options)
     LinkBtn.Font = Enum.Font.Gotham; LinkBtn.TextSize = 11; LinkBtn.TextXAlignment = Enum.TextXAlignment.Left
     LinkBtn.TextColor3 = Color3.fromRGB(37,99,235); LinkBtn.Text = "github.com/RuHit-Scripts"; LinkBtn.AutoButtonColor = false; LinkBtn.ZIndex = 6
     LinkBtn.MouseButton1Click:Connect(function()
-        setclipboard and setclipboard("https://github.com/RuHit-Scripts/NL-Mobile-Compatible")
+        if setclipboard then pcall(setclipboard, "https://github.com/RuHit-Scripts/NL-Mobile-Compatible") end
     end)
 
     task.spawn(function()
